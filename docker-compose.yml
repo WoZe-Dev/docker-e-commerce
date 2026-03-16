@@ -51,6 +51,8 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    volumes:
+      - ./scripts/init-products.sh:/init-products.sh:ro
     networks:
       - app-network
     healthcheck:
@@ -60,23 +62,6 @@ services:
       retries: 5
       start_period: 15s
 
-  
-  product-init:
-    image: alpine/curl:latest
-    container_name: product-init
-    restart: "no"
-    volumes:
-      - ./scripts/init-products.sh:/init-products.sh:ro
-    environment:
-      - API_URL=http://product-service:3000/api
-    command: ["sh", "/init-products.sh"]
-    depends_on:
-      product-service:
-        condition: service_healthy
-    networks:
-      - app-network
-
-  
   order-service:
     build:
       context: ./services/order-service
