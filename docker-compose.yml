@@ -69,7 +69,8 @@ services:
       - ./scripts/init-products.sh:/init-products.sh:ro
     environment:
       - API_URL=http://product-service:3000/api
-    command: ["sh", "/init-products.sh"]
+    command: >
+      sh -c "sed 's|localhost:3000|product-service:3000|g' /init-products.sh | sh"
     depends_on:
       product-service:
         condition: service_healthy
