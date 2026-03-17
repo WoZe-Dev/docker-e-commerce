@@ -29,6 +29,10 @@ Accès : http://localhost:8080
 Créer le fichier de secret JWT avant le premier lancement :
 
 ```bash
+mkdir secrets
+```
+
+```bash
 echo "ton mdp secret" > secrets/jwt_secret.txt
 ```
 
