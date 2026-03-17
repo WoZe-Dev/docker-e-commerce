@@ -1,0 +1,128 @@
+services:
+
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: unless-stopped
+    environment:
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/auth
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - NODE_ENV=production
+    secrets:
+      - jwt_secret
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  product-service:
+    build:
+      context: ./services/product-service
+      dockerfile: Dockerfile
+    container_name: product-service
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/ecommerce
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - NODE_ENV=production
+    secrets:
+      - jwt_secret
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  product-init:
+    image: alpine/curl:latest
+    container_name: product-init
+    restart: "no"
+    volumes:
+      - ./scripts/init-products.sh:/init-products.sh:ro
+    command: >
+      sh -c "sed 's|localhost:3000|product-service:3000|g' /init-products.sh | sh"
+    depends_on:
+      product-service:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: order-service
+    restart: unless-stopped
+    environment:
+      - PORT=3002
+      - MONGODB_URI=mongodb://mongodb:27017/orders
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - VITE_PRODUCT_SERVICE_URL=http://product-service:3000
+      - NODE_ENV=production
+    secrets:
+      - jwt_secret
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      product-service:
+        condition: service_started
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - VITE_AUTH_SERVICE_URL=http://auth-service:3001
+      - VITE_PRODUCT_SERVICE_URL=http://product-service:3000
+      - VITE_ORDER_SERVICE_URL=http://order-service:3002
+      - NODE_ENV=production
+    depends_on:
+      - auth-service
+      - product-service
+      - order-service
+    networks:
+      - app-network
+
+volumes:
+  mongo-data:
+
+networks:
+  app-network:
+    driver: bridge
+
+secrets:
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
