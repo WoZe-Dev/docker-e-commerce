@@ -14,7 +14,7 @@ export const auth = (req, res, next) => {
       return res.status(401).json({ message: 'Token malformé' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'test_secret');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'efrei_super_pass');
     req.user = decoded;
     next();
   } catch (error) {
