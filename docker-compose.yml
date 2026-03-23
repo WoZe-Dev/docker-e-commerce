@@ -1,6 +1,5 @@
 services:
 
-  
   mongodb:
     image: mongo:7
     container_name: mongodb
@@ -18,36 +17,50 @@ services:
       retries: 5
       start_period: 20s
 
-
   auth-service:
     build:
       context: ./services/auth-service
       dockerfile: Dockerfile
+      target: development
     container_name: auth-service
     restart: unless-stopped
+    ports:
+      - "3001:3001"
     environment:
       - PORT=3001
       - MONGODB_URI=mongodb://mongodb:27017/auth
-      - JWT_SECRET=efrei_super_pass
-      - NODE_ENV=production
+      - JWT_SECRET=dev_secret_key
+      - NODE_ENV=development
+    volumes:
+      - ./services/auth-service/src:/app/src
     depends_on:
       mongodb:
         condition: service_healthy
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
-        
   product-service:
     build:
       context: ./services/product-service
       dockerfile: Dockerfile
+      target: development
     container_name: product-service
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     environment:
       - PORT=3000
       - MONGODB_URI=mongodb://mongodb:27017/ecommerce
-      - JWT_SECRET=efrei_super_pass
-      - NODE_ENV=production
+      - JWT_SECRET=dev_secret_key
+      - NODE_ENV=development
+    volumes:
+      - ./services/product-service/src:/app/src
     depends_on:
       mongodb:
         condition: service_healthy
@@ -60,7 +73,6 @@ services:
       retries: 5
       start_period: 15s
 
-  
   product-init:
     image: alpine/curl:latest
     container_name: product-init
@@ -77,54 +89,72 @@ services:
     networks:
       - app-network
 
-  
   order-service:
     build:
       context: ./services/order-service
       dockerfile: Dockerfile
+      target: development
     container_name: order-service
     restart: unless-stopped
+    ports:
+      - "3002:3002"
     environment:
       - PORT=3002
       - MONGODB_URI=mongodb://mongodb:27017/orders
-      - JWT_SECRET=efrei_super_pass
+      - JWT_SECRET=dev_secret_key
       - VITE_PRODUCT_SERVICE_URL=http://product-service:3000
-      - NODE_ENV=production
+      - NODE_ENV=development
+    volumes:
+      - ./services/order-service/src:/app/src
     depends_on:
       mongodb:
         condition: service_healthy
       product-service:
-        condition: service_started
+        condition: service_healthy
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
-        
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
     container_name: frontend
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
       - PORT=8080
-      
       - VITE_AUTH_SERVICE_URL=http://auth-service:3001
       - VITE_PRODUCT_SERVICE_URL=http://product-service:3000
       - VITE_ORDER_SERVICE_URL=http://order-service:3002
-      - NODE_ENV=production
+      - NODE_ENV=development
+    volumes:
+      - ./frontend/src:/app/src
     depends_on:
-      - auth-service
-      - product-service
-      - order-service
+      auth-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
     networks:
       - app-network
-
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   mongo-data:
-
 
 networks:
   app-network:
